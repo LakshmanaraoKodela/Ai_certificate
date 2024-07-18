@@ -1,0 +1,39 @@
+******************************************************* DP - 900   ******************************************************************************
+
+Data : Data is nothing but collection raw or numbers,descriptions , objects ,real facts stored in a structured , semistructured or un structured way.
+
+Structured data : It is represented in the form of tables , the data stored in an organised way.The data can be managed in a relational database.
+Eg : SQL , Excel
+
+Semi_ structured data : Semi-structured data does not follow the format of a tabular data model or relational databases because it does not have a fixed schema.
+Eg : Email , No SQL, csv, xml,Json,html,rdf
+
+Un-Structured data : The data which is not in a organised manner
+eg : Audio , video,text
+
+Descrete data : is a data which can take finite  values in a specified range, and have the clear spaces between the values.
+
+# it is countable 
+# It is not much precise
+# used for BarChart and pie chart
+
+Continuous data : the data which can take the infinite values in a specified range .
+# it is more precise and can be measured
+# used for Histogram and scatterplot
+
+
+Types of Analysis :
+there are 4 or 5 types of data for analysis purpose 
+ 
+1.Descriptive : It is all about WHAT , what happened ?, this can be done with live data , helps effective visuvalizations, talk about past
+    eg : Metrics , statistics
+
+2.Diagnostic : WHY ? to understand the root of the problem ,  talk about past
+    eg : pca , regression analysis
+
+3. Predictive : FUTURE , like IF , what to if any particular problem occurred ,  talk about future
+   eg : Mechine learning algorithms
+
+4. Prescriptive : What should i do ?  talk about future
+   Eg : neutral network , recommender systems
+

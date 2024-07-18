@@ -1,0 +1,331 @@
+1. CTGAN (Conditional Tabular GAN)
+CTGAN is a GAN-based model designed specifically for tabular data. It can handle various types of data, including continuous, categorical, and mixed-type data. CTGAN is effective in capturing complex relationships and distributions within the data.
+
+Pros:
+
+Handles different types of data (categorical, continuous).
+Captures complex data distributions and relationships.
+Open-source and well-documented.
+Cons:
+
+May require tuning for large datasets.
+Training GANs can be resource-intensive.
+2. TGAN (TableGAN)
+TGAN is another GAN-based model specifically designed for tabular data. It focuses on generating high-quality synthetic data by learning the distribution of the real data.
+
+Pros:
+
+Effective in capturing relationships in tabular data.
+Can handle various data types.
+Cons:
+
+May struggle with very high-dimensional data.
+Requires substantial computational resources.
+3. Synthpop
+Synthpop is an R package for producing synthetic versions of microdata sets that are useful for confidential data dissemination and for generating test data for data analysis.
+
+Pros:
+
+Easy to use with R.
+Provides a range of methods for different types of data.
+Good for smaller datasets.
+Cons:
+
+Might not scale well to very large datasets.
+Limited flexibility compared to GAN-based models.
+4. SDV (Synthetic Data Vault)
+SDV is a comprehensive framework that includes several models for generating synthetic data, including Gaussian Copula, CTGAN, and others. It supports generating synthetic data for multi-table databases while preserving relationships across tables.
+
+Pros:
+
+Comprehensive and flexible.
+Supports multi-table datasets.
+Includes pre-trained models for ease of use.
+Cons:
+
+May require understanding of multiple models to choose the best one.
+Performance can vary based on the chosen model and dataset.
+5. GPT-3 and Similar Large Language Models
+While not specifically designed for generating structured tabular data, large language models like GPT-3 can be adapted for synthetic data generation through careful prompt engineering.
+
+Pros:
+
+Highly flexible and capable of generating a wide range of data types.
+Can be fine-tuned for specific tasks.
+Cons:
+
+Requires significant computational resources.
+May need extensive prompt tuning and validation.
+Recommendations
+For high-dimensional, complex data with significant relationships, CTGAN or SDV with CTGAN are likely the best options due to their ability to capture intricate data distributions and relationships.
+For more straightforward tabular data and ease of use, Synthpop or SDV with simpler models like Gaussian Copula can be very effective.
+For scenarios requiring multi-table data generation with relational integrity, SDV stands out as a versatile choice.
+Implementation and Efficiency
+Efficiency in generating millions of records also depends on the implementation and hardware used. Using distributed computing and optimized libraries can significantly reduce the time required for synthetic data generation.
+
+Steps to ensure efficiency:
+
+Optimize Data Preprocessing: Efficiently preprocess the data to reduce redundancy and handle missing values effectively.
+Parallel Processing: Utilize parallel processing where possible to speed up computation.
+Resource Management: Use scalable cloud resources or powerful local hardware to manage large-scale data generation.
+By carefully selecting the appropriate model and optimizing the generation process, it is possible to generate accurate and efficient synthetic data for various types of defined schemas.
+
+
+
+
+
+
+
+
+
+
+from sdv.metadata import SingleTableMetadata
+from sdv.single_table import GaussianCopulaSynthesizer
+import pandas as pd
+import numpy as np
+from dateutil.relativedelta import relativedelta
+import names
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def validate_schema(schema):
+    """
+    Validate the provided schema to ensure all necessary information is present.
+
+    Args:
+        schema (dict): The schema to validate.
+
+    Raises:
+        ValueError: If the schema is invalid.
+    """
+    for col_name, col_schema in schema.items():
+        if 'type' not in col_schema:
+            raise ValueError(f"Column '{col_name}' must have a 'type' specified.")
+        col_type = col_schema['type']
+        if col_type not in ['categorical', 'integer', 'date', 'string', 'mixed']:
+            raise ValueError(f"Unsupported type '{col_type}' for column '{col_name}'.")
+
+
+def generate_synthetic_data(schema, num_rows=10_000, seed=None):
+    """
+    Generate synthetic data based on the provided schema.
+
+    Args:
+        schema (dict): A dictionary representing the schema, where keys are column names
+            and values are dictionaries with 'type' and other relevant keys.
+        num_rows (int): The number of rows to generate.
+        seed (int or None): Random seed for reproducibility.
+
+    Returns:
+        pandas.DataFrame: The generated synthetic data.
+    """
+    validate_schema(schema)
+
+    metadata = SingleTableMetadata()
+
+    # Add columns to the metadata
+    for col_name, col_schema in schema.items():
+        col_type = col_schema['type']
+        sdtype = col_schema.get('sdtype')
+        if col_type == 'categorical':
+            metadata.add_column(
+                column_name=col_name,
+                sdtype=sdtype if sdtype is not None else 'categorical',
+            )
+        else:
+            metadata.add_column(
+                column_name=col_name,
+                **{k: v for k, v in col_schema.items() if k not in ['type', 'values']}  # Exclude 'type' and 'values' keys
+            )
+
+    # Save metadata
+    metadata.save_to_json('metadatass.json')
+
+    # Create the synthesizer
+    synthesizer = GaussianCopulaSynthesizer(metadata, default_distribution='beta')
+
+    np.random.seed(seed)  # Set the seed for reproducibility
+
+    print("Schema used for synthetic data generation:")
+    print(schema.keys())
+
+    # Print schema keys to verify extraction
+    print("Schema keys:")
+    print(schema.keys())
+
+    print("Generating synthetic data...")
+    try:
+        # Dummy fit with a single row DataFrame to initialize
+        fit_dataframe = pd.DataFrame({col_name: [generate_dummy_value(col_schema) for col_name, col_schema in schema.items()]})
+        fit_dataframe.columns = [col_name for col_name in metadata.columns]  # Set column names to match metadata
+        print("Fit DataFrame shape:", fit_dataframe.shape)
+        synthesizer.fit(fit_dataframe)
+        synthetic_data = synthesizer.sample(num_rows=num_rows)
+    except Exception as e:
+        print(f"Error generating synthetic data: {e}")
+        raise
+
+    print("Synthetic data generation completed.")
+
+    # Transform the data based on the schema constraints
+    try:
+        synthetic_data = transform_data(synthetic_data, schema)
+    except Exception as e:
+        print(f"Error transforming synthetic data: {e}")
+        raise
+
+    return synthetic_data
+
+
+def generate_dummy_value(col_schema):
+    """
+    Generate a dummy value for a column based on its schema.
+
+    Args:
+        col_schema (dict): The schema of the column.
+
+    Returns:
+        object: The dummy value for the column.
+    """
+    col_type = col_schema['type']
+    if col_type == 'categorical':
+        return np.random.choice(col_schema['values'])
+    elif col_type == 'integer':
+        return 0  # Dummy integer value
+    elif col_type == 'date':
+        return pd.Timestamp('1970-01-01')  # Dummy date value
+    elif col_type == 'string':
+        return 'Dummy'  # Dummy string value
+    elif col_type == 'mixed':
+        return generate_mixed_value(col_schema)
+
+# Other functions remain unchanged...
+
+
+ 
+def transform_data(data, schema):
+    for col_name, col_schema in schema.items():
+        col_type = col_schema['type']
+        if col_type == 'integer':
+            min_value = col_schema.get('min', None)
+            max_value = col_schema.get('max', None)
+            if min_value is not None and max_value is not None:
+                data[col_name] = data[col_name].apply(lambda x: min(max(int(x), min_value), max_value))
+        elif col_type == 'date':
+            start_date = col_schema.get('start_date', None)
+            end_date = col_schema.get('end_date', None)
+            if start_date is not None and end_date is not None:
+                data[col_name] = pd.to_datetime(data[col_name], errors='coerce').apply(lambda x: max(min(x, end_date), start_date))
+        elif col_type == 'string':
+            string_generator = col_schema.get('generator', None)
+            if string_generator == 'names':
+                data[col_name] = data[col_name].apply(lambda x: names.get_full_name() if pd.isna(x) else x)
+            elif string_generator is not None:
+                data[col_name] = data[col_name].apply(lambda x: generate_string_by_pattern(string_generator))
+        elif col_type == 'mixed':
+            data[col_name] = data[col_name].apply(lambda x: x if pd.notna(x) else generate_mixed_value(col_schema))
+
+        sdtype = col_schema.get('sdtype', None)
+        if sdtype:
+            if sdtype == 'integer':
+                data[col_name] = data[col_name].astype(int)
+            elif sdtype == 'float':
+                data[col_name] = data[col_name].astype(float)
+            elif sdtype == 'timestamp':
+                data[col_name] = pd.to_datetime(data[col_name], errors='coerce')
+
+    return data
+
+def generate_mixed_value(col_schema):
+    value_types = col_schema['value_types']
+    value_distributions = col_schema.get('value_distributions', [1 / len(value_types)] * len(value_types))
+
+    value_type = np.random.choice(value_types, p=value_distributions)
+
+    if value_type == 'integer':
+        min_value = col_schema.get('min', 0)
+        max_value = col_schema.get('max', 100)
+        return np.random.randint(min_value, max_value + 1)
+    elif value_type == 'float':
+        min_value = col_schema.get('min', 0.0)
+        max_value = col_schema.get('max', 1.0)  # Fixed the missing closing parenthesis
+        return np.random.uniform(min_value, max_value)  # Assuming uniform distribution for floats
+    elif value_type == 'categorical':
+        values = col_schema['values']
+        return np.random.choice(values)
+    elif value_type == 'date':
+        start_date = col_schema.get('start_date', pd.Timestamp('1970-01-01'))
+        end_date = col_schema.get('end_date', pd.Timestamp('2000-12-31'))
+        return pd.Timestamp(start_date + np.random.randint((end_date - start_date).days) * pd.Timedelta(days=1))
+    elif value_type == 'string':
+        string_generator = col_schema.get('generator', None)
+        if string_generator == 'names':
+            return names.get_full_name()
+        else:
+            return generate_string_by_pattern(string_generator)
+
+
+def generate_string_by_pattern(pattern):
+    """
+    Generate a string based on a given pattern.
+
+    Args:
+        pattern (str): The pattern for string generation.
+
+    Returns:
+        str: The generated string.
+    """
+    if pattern == 'names':
+        return names.get_full_name()
+    elif pattern == 'email':
+        return generate_random_email()
+    elif pattern == 'address':
+        return generate_random_address()
+    else:
+        return ''.join(np.random.choice(list('abcdefghijklmnopqrstuvwxyz'), size=10))
+
+def generate_random_email():
+    """
+    Generate a random email address.
+
+    Returns:
+        str: The generated email address.
+    """
+    domains = ["example.com", "test.com", "sample.org"]
+    return f"{names.get_first_name().lower()}.{names.get_last_name().lower()}@{np.random.choice(domains)}"
+
+
+def generate_random_address():
+    """
+    Generate a random address.
+
+    Returns:
+        str: The generated address.
+    """
+    streets = ["Main St", "Broadway", "Elm St", "Maple Ave"]
+    return f"{np.random.randint(100, 999)} {np.random.choice(streets)}, {names.get_full_name()}, {np.random.choice(['USA', 'Canada', 'UK'])}"
+
+# Example usage
+schema = {
+    'Country': {'type': 'categorical', 'values': ['USA', 'Canada', 'Mexico', 'Brazil', 'Argentina'], 'sdtype': 'categorical'},
+    'State': {'type': 'string', 'sdtype': 'text'},
+    'City': {'type': 'string', 'sdtype': 'text'},
+    'Name': {'type': 'string', 'sdtype': 'text'},
+    'Gender': {'type': 'categorical', 'values': ['Male', 'Female', 'Other'], 'sdtype': 'categorical'},
+    'Date_of_Birth': {'type': 'date', 'sdtype': 'datetime'},
+    'Age': {'type': 'integer', 'sdtype': 'numerical'},
+    'Income': {'type': 'integer', 'sdtype': 'numerical'},  # Changed from 'numerical' to 'numerical'
+    'Marital_Status': {'type': 'categorical', 'values': ['Single', 'Married', 'Divorced', 'Widowed'], 'sdtype': 'categorical'},
+}
+
+
+
+synthetic_data = generate_synthetic_data(schema, num_rows=100_000, seed=42)
+
+# Save synthetic data to CSV
+synthetic_data.to_csv('synthetic_data.csv', index=False)
+# Print the data
+print(synthetic_data.head(10))
